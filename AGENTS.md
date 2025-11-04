@@ -1,0 +1,1 @@
+# Always use the file AGENTS.md to track what you learn, develop, and understand. Expect emergence and update this document as your evolve and get smarter in your understanding of what we are dealing with. Ensure you use mind mapping techniques.
