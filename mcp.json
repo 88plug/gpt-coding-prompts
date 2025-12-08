@@ -44,11 +44,6 @@
       "command": ["npx", "-y", "@upstash/context7-mcp"],
       "enabled": true
     },
-    "brave-search": {
-      "type": "local",
-      "command": ["npx", "-y", "@brave/brave-search-mcp-server", "--transport", "http"],
-      "enabled": true
-    },
     "chrome-devtools": {
       "type": "local",
       "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
@@ -58,10 +53,6 @@
       "type": "local",
       "command": ["npx", "-y", "mcp-remote", "https://mcp.exa.ai/mcp"],
       "enabled": true
-    },
-    "mcp-server-firecrawl": {
-      "type": "local",
-      "command": ["npx", "-y", "firecrawl-mcp"],
-      "enabled": true
-    }    
+    }
   }
+
