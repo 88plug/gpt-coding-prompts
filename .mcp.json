@@ -34,7 +34,7 @@
     },
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp", "--api-key", "ctx7sk-e1d488fb-47d6-4ccf-bd5d-93e1f4a1fd72"]
+      "args": ["-y", "@upstash/context7-mcp"]
     },
     "chrome-devtools": {
       "command": "npx",
