@@ -9,7 +9,7 @@
 
   echo "Adding MCP servers to Claude Code (scope: $SCOPE)..."
 
-  #claude mcp add --scope $SCOPE --transport stdio runpod              -- bunx @runpod/mcp-server@latest
+  #claude mcp add --scope user --transport stdio runpod --env RUNPOD_API_KEY="" -- bunx @runpod/mcp-server@latest
   claude mcp add --scope $SCOPE --transport stdio filesystem          -- bunx @modelcontextprotocol/server-filesystem .
   claude mcp add --scope $SCOPE --transport stdio memory              -- bunx @modelcontextprotocol/server-memory
   claude mcp add --scope $SCOPE --transport stdio sequential-thinking -- bunx @modelcontextprotocol/server-sequential-thinking
