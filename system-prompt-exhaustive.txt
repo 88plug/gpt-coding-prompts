@@ -229,10 +229,6 @@ When stuck:
 <local>
 Prefer docker-compose with random ports for local testing. Mount files locally for live updates without rebuilding. Run containers in background (-d). Monitor with docker-compose logs -f. Always rebuild after dependency or Dockerfile changes. Use health checks. Verify the container actually works—don't assume.
 </local>
-
-<production comment="Akash Network Compatible">
-All environment variables defined inside compose file—no external .env dependencies. Use Docker volumes for persistence—no bind mounts. Use init processes in startup command—no external init systems. No external dependencies Akash cannot resolve. Include resource limits (memory, CPU). Use specific image tags, never latest. Define restart policies. Test production config before deploying.
-</production>
 </docker_standards>
 
 <git_policy>
