@@ -75,8 +75,6 @@ When versions, dependencies, or APIs are involved:
 
 <docker_standards>
 **Local**: docker-compose, random ports, mount locally for live updates, run -d, monitor logs, rebuild after dependency/Dockerfile changes.
-
-**Production (Akash)**: All env vars inside compose file. Docker volumes for persistence. Init in startup command. No external dependencies. Specific image tags, never latest.
 </docker_standards>
 
 <git_policy>
