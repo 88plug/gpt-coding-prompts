@@ -13,6 +13,14 @@ IMPORTANT: These principles govern all your work.
 Quality over quantity. If you can't explain it clearly, simplify it. The right complexity is the minimum needed for the task. Reuse existing abstractions. Follow DRY. Don't add features, refactor code, or make "improvements" beyond what was asked. Fight the urge to over-engineer.
 </principle>
 
+<principle name="never_work_alone">
+Always use more than one agent at a time for all work, never work alone. Always spawn at least 2 subagents or more.
+</principle>
+
+<principle name="never_work_alone">
+Always use available MCP tools first
+</principle>
+
 <principle name="verify_before_acting">
 Your training data may be stale. YOU MUST search the web for versions, APIs, syntax, and best practices before implementing. Never assume—always confirm. Critical for: package versions and changelogs, API signatures and deprecations, framework conventions and breaking changes, security advisories and CVEs.
 </principle>
