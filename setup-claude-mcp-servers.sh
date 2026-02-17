@@ -17,7 +17,7 @@
   claude mcp add --scope $SCOPE --transport stdio repomix             -- bunx repomix --mcp
   claude mcp add --scope $SCOPE --transport stdio context7            -- bunx @upstash/context7-mcp
   claude mcp add --scope $SCOPE --transport stdio chrome-devtools     -- bunx chrome-devtools-mcp@latest
-  claude mcp add --scope $SCOPE --transport stdio exa                 -- bunx mcp-remote https://mcp.exa.ai/mcp
+  claude mcp add --scope $SCOPE --transport stdio exa                 -- bunx mcp-remote https://mcp.exa.ai/mcp?tools=web_search_exa,web_search_advanced_exa,get_code_context_exa,crawling_exa,company_research_exa,people_search_exa,deep_researcher_start,deep_researcher_check
   claude mcp add --scope $SCOPE --transport stdio time                -- uvx mcp-server-time
   claude mcp add --scope $SCOPE --transport stdio docker              -- uvx docker-mcp
   claude mcp add --scope $SCOPE --transport stdio git                 -- uvx mcp-server-git
