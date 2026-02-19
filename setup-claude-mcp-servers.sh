@@ -15,7 +15,7 @@
   claude mcp add --scope $SCOPE --transport stdio filesystem          -- bunx @modelcontextprotocol/server-filesystem .
   claude mcp add --scope $SCOPE --transport stdio memory              -- bunx @modelcontextprotocol/server-memory
   claude mcp add --scope $SCOPE --transport stdio sequential-thinking -- bunx @modelcontextprotocol/server-sequential-thinking
-  claude mcp add --scope $SCOPE --transport stdio fetch               -- bunx @modelcontextprotocol/server-fetch
+  claude mcp add --scope $SCOPE --transport stdio fetch               -- uvx mcp-server-fetch
   claude mcp add --scope $SCOPE --transport stdio repomix             -- bunx repomix --mcp
   claude mcp add --scope $SCOPE --transport stdio context7            -- bunx @upstash/context7-mcp
   claude mcp add --scope $SCOPE --transport stdio chrome-devtools     -- bunx chrome-devtools-mcp@latest
