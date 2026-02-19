@@ -1,7 +1,7 @@
   #!/usr/bin/env bash
   # setup-claude-mcp-servers.sh
   # Adds default MCP servers to Claude Code user config
-  # Uses bunx 
+  # Uses bunx and uvx
 
   set -euo pipefail
 
