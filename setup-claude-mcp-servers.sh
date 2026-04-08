@@ -8,7 +8,8 @@
   SCOPE="user"
 
   echo "Adding MCP servers to Claude Code (scope: $SCOPE)..."
-
+  
+  claude mcp add --scope $SCOPE --transport stdio grafana --env GRAFANA_URL="" --env GRAFANA_SERVICE_ACCOUNT_TOKEN="" -- uvx mcp-grafana
   claude mcp add --scope $SCOPE --transport http slack                -- https://mcp.slack.com/mcp
   claude mcp add --scope $SCOPE --transport http linear-server        -- https://mcp.linear.app/mcp
   claude mcp add --scope $SCOPE --transport http notion               -- https://mcp.notion.com/mcp
