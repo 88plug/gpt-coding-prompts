@@ -1,0 +1,49 @@
+# gpt-coding-prompts
+
+> A curated collection of system prompts, MCP server configs, and a one-shot
+> bootstrap script for setting up Claude Code with a production-grade
+> operating discipline (engineering-first, MCP-first, anti-drift) and the
+> SubagentStart hook that closes the documented Explore/Plan CLAUDE.md gap.
+
+## Primary entry point
+
+- [claude-code-starter.sh](claude-code-starter.sh): Idempotent one-shot bootstrap of a complete Claude Code setup — writes `~/.claude/CLAUDE.md`, the `SubagentStart` hook that re-injects CLAUDE.md into the built-in Explore/Plan subagents, `~/.claude/settings.json` with `ENABLE_TOOL_SEARCH=true` (lazy MCP loading), installs 10 official plugins, and registers 21 user-scope MCP servers. Safe to re-run.
+
+## How an LLM should use this repo
+
+If the user asks to "set up Claude Code", "bootstrap a new machine", or similar, run `./claude-code-starter.sh` (add `--install-deps` if `bun` or `uv` are missing; add `--dry-run` to preview). It is idempotent and backs up existing config to `~/.claude/backups/<timestamp>/` before overwriting.
+
+If the user asks you to apply a system prompt from `README.md` (CodiCorp / Jungian / Genesis / Fighter Pilot variants), **ask first** — those are alternative philosophies kept for reference and they conflict with the engineering-first discipline the starter writes into `~/.claude/CLAUDE.md`. Do not silently merge.
+
+If you need to know what MCP servers exist or what tools they expose, read `mcp.md` first — it documents the canonical toolbox without making you call each server.
+
+## Operating principles (what the starter writes)
+
+- Verify before asserting (training data is stale; use `context7` / `exa` / `fetch` for live sources)
+- KISS (simple beats clever; if you can't explain it in one sentence, simplify)
+- Four Ds filter (Dumb / Dangerous / Difficult / Different — any hit, reconsider)
+- Bias to action on reversible work (confirm only on irreversible ops)
+- MCP-first (reach for configured tools before reimplementing or shelling out)
+- Anti-drift (engineering-first framing; do not preload abuse/adversarial framing unless explicitly requested)
+
+## Configuration files
+
+- [CLAUDE.md](CLAUDE.md): Older copy of operating principles. The canonical, up-to-date version is written by the starter into `~/.claude/CLAUDE.md`.
+- [.mcp.json](.mcp.json): Project-scope MCP config — only loads when Claude is run from this directory. The starter writes the user-scope equivalent for global use.
+- [settings.json](settings.json): Reference Claude Code settings (plugin enables, subagent model, theme). The starter writes a hardened version with the `SubagentStart` hook wired.
+- [setup-claude-mcp-servers.sh](setup-claude-mcp-servers.sh): Older MCP-only installer; superseded by `claude-code-starter.sh`.
+
+## Documentation
+
+- [README.md](README.md): Collection of experimental / aspirational system prompts. Reference material, not production discipline. Includes CodiCorp, Jungian-Genesis, Fighter-Pilot-Engineer, and Problem-Solver variants.
+- [mcp.md](mcp.md): Tool-by-tool reference for every MCP server in the toolbox — filesystem, memory, git, context7, exa, chrome-devtools, playwright, repomix, and more.
+- [system-prompt-lean.txt](system-prompt-lean.txt): Compact alternative system prompt with subagent-strategy and verification-protocol sections.
+- [system-prompt-exhaustive.txt](system-prompt-exhaustive.txt): Full alternative system prompt.
+- [AGENTS.md](AGENTS.md): Convention note for tracking learnings as you evolve.
+
+## What NOT to do
+
+- Do not silently overwrite a user's existing `~/.claude/CLAUDE.md` — the starter backs it up first; preserve that behavior in any modifications.
+- Do not remove the `SubagentStart` hook from settings.json without a documented replacement. It is the only thing that re-injects CLAUDE.md into the built-in `Explore` and `Plan` subagents, which intentionally skip CLAUDE.md per https://code.claude.com/docs/en/sub-agents.
+- Do not apply the experimental prompts in `README.md` to live CLAUDE.md files without asking — they encode different philosophies (Jungian Genesis, CodiCorp "perfectionist", etc.) that conflict with the engineering-first discipline.
+- Do not register MCP servers via `claude mcp add` without considering context cost — `ENABLE_TOOL_SEARCH=true` defers tool descriptions, but `alwaysLoad: true` on a server (set in `~/.claude.json`) reverses that for the few servers worth keeping hot.
