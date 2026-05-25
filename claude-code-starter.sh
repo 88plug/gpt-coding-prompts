@@ -16,12 +16,11 @@
 #   5. Writes ~/.claude/settings.json — subagent model = opus, official plugins
 #      enabled, dark theme, sandbox off, SubagentStart hook wired to (4).
 #   6. Adds the claude-plugins-official marketplace and installs the 10 plugins.
-#   6b. Adds 88plug/caveman-plus marketplace and installs caveman-plus@caveman-plus
-#      (88plug edition, full-plus default — ~75% token savings, benchmarked).
-#      Skip with --skip-caveman.
-#   6c. Adds 88plug marketplace and installs amnesia@88plug (context continuity
-#      across Claude Code compaction — preemptive snapshot, mechanical handoff,
-#      async Opus 4.7 enrichment). Skip with --skip-amnesia.
+#   6b. Adds the 88plug marketplace (hosts both amnesia and caveman-plus) and
+#      installs amnesia@88plug (context continuity across Claude Code compaction
+#      — preemptive snapshot, mechanical handoff, async Opus 4.7 enrichment) and
+#      caveman-plus@88plug (terse output, ~75% token savings, benchmarked,
+#      default full-plus). Skip with --skip-amnesia / --skip-caveman.
 #   7. Registers user-scope MCP servers (filesystem, memory, git, time, fetch,
 #      sequential-thinking, repomix, context7, chrome-devtools, playwright, exa,
 #      slack, linear, notion). Idempotent: skips already-registered servers.
@@ -37,6 +36,10 @@
 #   --install-deps    Auto-install missing bun and uv (via their official curl|sh
 #                     installers from bun.sh and astral.sh). Without this flag,
 #                     missing deps print the exact install command and fail.
+#   --keep-safe-defaults
+#                     Keep Claude Code's default sandbox + dangerous-mode prompt
+#                     on. Without this flag, settings.json writes sandbox.enabled
+#                     = false and skipDangerousModePermissionPrompt = true.
 #   --dry-run, -n     Print actions without executing.
 #   --help, -h        Show this header and exit.
 #
@@ -58,6 +61,7 @@ SKIP_PLUGINS=0
 SKIP_CAVEMAN=0
 SKIP_AMNESIA=0
 INSTALL_DEPS=0
+KEEP_SAFE_DEFAULTS=0
 for arg in "$@"; do
   case "$arg" in
     --force|-f) FORCE=1 ;;
@@ -66,8 +70,9 @@ for arg in "$@"; do
     --skip-caveman) SKIP_CAVEMAN=1 ;;
     --skip-amnesia) SKIP_AMNESIA=1 ;;
     --install-deps) INSTALL_DEPS=1 ;;
+    --keep-safe-defaults) KEEP_SAFE_DEFAULTS=1 ;;
     --dry-run|-n) DRY_RUN=1 ;;
-    --help|-h) sed -n '1,/^set -e/p' "$0" | sed 's/^# \?//' | head -n -1; exit 0 ;;
+    --help|-h) sed -n '1,/^set -e/p' "$0" | sed '$d' | sed 's/^# \?//'; exit 0 ;;
     *) printf 'unknown flag: %s\n' "$arg" >&2; exit 1 ;;
   esac
 done
@@ -77,6 +82,11 @@ log()  { printf '\033[1;34m[starter]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 run()  { if [ "$DRY_RUN" = 1 ]; then printf '\033[1;36m[dry-run]\033[0m %s\n' "$*"; else eval "$@"; fi; }
+
+# Track soft failures (plugin/MCP installs we tolerate per-item, but want to
+# surface at exit so the user can't mistake a partial install for success).
+INSTALL_FAILURES=()
+record_failure() { INSTALL_FAILURES+=("$1"); warn "  $1: install failed"; }
 
 CLAUDE_DIR="${HOME}/.claude"
 HOOKS_DIR="${CLAUDE_DIR}/hooks"
@@ -244,7 +254,7 @@ The built-in `Explore` and `Plan` subagents skip CLAUDE.md by default (documente
 
 # Caveman-plus mode (88plug edition, default: full-plus)
 
-`caveman-plus@caveman-plus` is installed by default. Active at `full-plus` — terse, fragment-OK output that drops articles/filler while preserving full technical accuracy. Benchmarked at +44.1% general / +45.5% dialogue token savings vs the upstream `full` default, near-zero quality cost. Source + benchmarks: https://github.com/88plug/caveman-plus (see `benchmarks/final-benchmark-summary-2026-04-20.md`).
+`caveman-plus@88plug` is installed by default. Active at `full-plus` — terse, fragment-OK output that drops articles/filler while preserving full technical accuracy. Benchmarked at +44.1% general / +45.5% dialogue token savings vs the upstream `full` default, near-zero quality cost. Source + benchmarks: https://github.com/88plug/caveman-plus (see `benchmarks/final-benchmark-summary-2026-04-20.md`).
 
 Toggle in any session:
 - `/caveman lite|full|full-plus|ultra` — switch level
@@ -298,7 +308,7 @@ if [ -f "${USER_MD}" ]; then
 fi
 
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "${PROJECT_MD}" ]; then
-  content+=$'---\n\n## ${CLAUDE_PROJECT_DIR}/CLAUDE.md (project)\n\n'
+  content+=$'---\n\n## '"${CLAUDE_PROJECT_DIR}"$'/CLAUDE.md (project)\n\n'
   content+="$(cat "${PROJECT_MD}")"
   content+=$'\n'
 fi
@@ -312,6 +322,24 @@ fi
 log "Writing ${CLAUDE_DIR}/settings.json"
 
 if [ "$DRY_RUN" = 0 ]; then
+# Safety posture: default is sandbox-off + skip-dangerous-permission-prompt
+# (matches the established workflow on this machine — fewer interruptions for
+# the operator who owns the box). Pass --keep-safe-defaults to keep both on.
+if [ "$KEEP_SAFE_DEFAULTS" = 1 ]; then
+  SANDBOX_ENABLED=true
+  SKIP_DANGEROUS=false
+  log "  safety posture: SAFE DEFAULTS (sandbox on, dangerous-mode prompt enabled)"
+else
+  SANDBOX_ENABLED=false
+  SKIP_DANGEROUS=true
+  printf '\033[1;31m'
+  printf '╔════════════════════════════════════════════════════════════════════╗\n'
+  printf '║  SAFETY DOWNGRADE — writing sandbox.enabled=false                  ║\n'
+  printf '║  + skipDangerousModePermissionPrompt=true to settings.json.        ║\n'
+  printf '║  Re-run with --keep-safe-defaults to keep Claude Code defaults.    ║\n'
+  printf '╚════════════════════════════════════════════════════════════════════╝\n'
+  printf '\033[0m'
+fi
 # Template the hook path with the actual $HOME at install time so the JSON
 # works even in contexts where Claude Code doesn't expand env vars in commands.
 cat > "${CLAUDE_DIR}/settings.json" <<JSON_EOF
@@ -331,13 +359,13 @@ cat > "${CLAUDE_DIR}/settings.json" <<JSON_EOF
     "security-guidance@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "caveman-plus@caveman-plus": true,
+    "caveman-plus@88plug": true,
     "amnesia@88plug": true
   },
   "sandbox": {
-    "enabled": false
+    "enabled": ${SANDBOX_ENABLED}
   },
-  "skipDangerousModePermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": ${SKIP_DANGEROUS},
   "theme": "dark",
   "hooks": {
     "SubagentStart": [
@@ -372,55 +400,50 @@ if [ "$SKIP_PLUGINS" = 0 ]; then
     if claude plugin list 2>/dev/null | grep -q "${p}@claude-plugins-official"; then
       log "  ${p}: already installed"
     else
-      run "claude plugin install '${p}@claude-plugins-official' || true"
+      run "claude plugin install '${p}@claude-plugins-official'" \
+        || record_failure "${p}@claude-plugins-official"
     fi
   done
 else
   warn "Skipping plugin install (--skip-plugins)"
 fi
 
-# ===== 6b. caveman-plus (88plug edition, full-plus default) =====
-# Ships terse-mode output that cuts ~75% tokens with near-zero quality cost.
-# Benchmark: +44.1% general / +45.5% dialogue savings vs upstream `full` default.
-# Source: https://github.com/88plug/caveman-plus
-if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
-  log "Ensuring caveman-plus marketplace is registered"
-  if claude plugin marketplace list 2>/dev/null | grep -q '^caveman-plus'; then
-    log "  caveman-plus marketplace already registered"
-  else
-    run "claude plugin marketplace add 88plug/caveman-plus"
-  fi
-
-  if claude plugin list 2>/dev/null | grep -q 'caveman-plus@caveman-plus'; then
-    log "  caveman-plus: already installed"
-  else
-    run "claude plugin install 'caveman-plus@caveman-plus' || true"
-  fi
-elif [ "$SKIP_CAVEMAN" = 1 ]; then
-  warn "Skipping caveman-plus install (--skip-caveman)"
-fi
-
-# ===== 6c. amnesia (88plug, compaction continuity) =====
-# Survives Claude Code auto-compaction: continuous tool-call capture (PostToolUse),
-# mechanical handoff + async Opus 4.7 enrichment (PostCompact), preemptive snapshot
-# (UserPromptSubmit), state refinement (Stop), full restore on next session/resume
-# (SessionStart). Isolated from CLAUDE.md/auto-memory — invisible to the user.
-# Source: https://github.com/88plug/amnesia
-if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_AMNESIA" = 0 ]; then
-  log "Ensuring 88plug marketplace is registered (for amnesia)"
+# ===== 6b. 88plug marketplace (hosts amnesia + caveman-plus) =====
+# One marketplace, two plugins:
+#   - amnesia (compaction continuity — preemptive snapshot + mechanical handoff
+#     + async Opus 4.7 enrichment + 4-layer restore on resume).
+#   - caveman-plus (terse output, ~75% token savings, benchmarked +44.1% general /
+#     +45.5% dialogue vs upstream `full` default, default level full-plus).
+# Sources: https://github.com/88plug/amnesia  https://github.com/88plug/caveman-plus
+if [ "$SKIP_PLUGINS" = 0 ] && { [ "$SKIP_AMNESIA" = 0 ] || [ "$SKIP_CAVEMAN" = 0 ]; }; then
+  log "Ensuring 88plug marketplace is registered"
   if claude plugin marketplace list 2>/dev/null | grep -q '^88plug'; then
     log "  88plug marketplace already registered"
   else
     run "claude plugin marketplace add 88plug/amnesia"
   fi
+fi
 
+if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_AMNESIA" = 0 ]; then
   if claude plugin list 2>/dev/null | grep -q 'amnesia@88plug'; then
     log "  amnesia: already installed"
   else
-    run "claude plugin install 'amnesia@88plug' || true"
+    run "claude plugin install 'amnesia@88plug'" \
+      || record_failure "amnesia@88plug"
   fi
 elif [ "$SKIP_AMNESIA" = 1 ]; then
   warn "Skipping amnesia install (--skip-amnesia)"
+fi
+
+if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
+  if claude plugin list 2>/dev/null | grep -q 'caveman-plus@88plug'; then
+    log "  caveman-plus: already installed"
+  else
+    run "claude plugin install 'caveman-plus@88plug'" \
+      || record_failure "caveman-plus@88plug"
+  fi
+elif [ "$SKIP_CAVEMAN" = 1 ]; then
+  warn "Skipping caveman-plus install (--skip-caveman)"
 fi
 
 # ===== 7. MCP servers =====
@@ -432,7 +455,8 @@ if [ "$SKIP_MCP" = 0 ]; then
       log "  ${name}: already registered"
     else
       log "  ${name}: adding"
-      run "claude mcp add --scope user '$name' $*"
+      run "claude mcp add --scope user '$name' $*" \
+        || record_failure "mcp:${name}"
     fi
   }
 
@@ -525,10 +549,10 @@ if [ "$DRY_RUN" = 0 ]; then
 
   # caveman-plus install smoke check (skipped if --skip-caveman or --skip-plugins)
   if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
-    if claude plugin list 2>/dev/null | grep -q 'caveman-plus@caveman-plus'; then
+    if claude plugin list 2>/dev/null | grep -q 'caveman-plus@88plug'; then
       log "  caveman-plus: installed"
     else
-      warn "caveman-plus not registered — check 'claude plugin install caveman-plus@caveman-plus'"
+      warn "caveman-plus not registered — check 'claude plugin install caveman-plus@88plug'"
     fi
   fi
 
@@ -544,6 +568,14 @@ fi
 
 # ===== Summary =====
 log ""
+if [ "${#INSTALL_FAILURES[@]}" -gt 0 ]; then
+  warn "Setup finished with ${#INSTALL_FAILURES[@]} install failure(s):"
+  for f in "${INSTALL_FAILURES[@]}"; do
+    warn "  - ${f}"
+  done
+  warn "Re-run the script (or the individual 'claude plugin install ...' / 'claude mcp add ...' commands) to retry."
+  exit 1
+fi
 log "Setup complete."
 log ""
 log "Files written:"
