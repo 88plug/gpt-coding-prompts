@@ -19,6 +19,9 @@
 #   6b. Adds 88plug/caveman-plus marketplace and installs caveman-plus@caveman-plus
 #      (88plug edition, full-plus default — ~75% token savings, benchmarked).
 #      Skip with --skip-caveman.
+#   6c. Adds 88plug marketplace and installs amnesia@88plug (context continuity
+#      across Claude Code compaction — preemptive snapshot, mechanical handoff,
+#      async Opus 4.7 enrichment). Skip with --skip-amnesia.
 #   7. Registers user-scope MCP servers (filesystem, memory, git, time, fetch,
 #      sequential-thinking, repomix, context7, chrome-devtools, playwright, exa,
 #      slack, linear, notion). Idempotent: skips already-registered servers.
@@ -30,6 +33,7 @@
 #   --skip-mcp        Skip MCP server registration (step 7).
 #   --skip-plugins    Skip plugin installation (step 6).
 #   --skip-caveman    Skip caveman-plus install (default: installed, full-plus mode).
+#   --skip-amnesia    Skip amnesia install (default: installed, compaction continuity).
 #   --install-deps    Auto-install missing bun and uv (via their official curl|sh
 #                     installers from bun.sh and astral.sh). Without this flag,
 #                     missing deps print the exact install command and fail.
@@ -52,6 +56,7 @@ DRY_RUN=0
 SKIP_MCP=0
 SKIP_PLUGINS=0
 SKIP_CAVEMAN=0
+SKIP_AMNESIA=0
 INSTALL_DEPS=0
 for arg in "$@"; do
   case "$arg" in
@@ -59,6 +64,7 @@ for arg in "$@"; do
     --skip-mcp) SKIP_MCP=1 ;;
     --skip-plugins) SKIP_PLUGINS=1 ;;
     --skip-caveman) SKIP_CAVEMAN=1 ;;
+    --skip-amnesia) SKIP_AMNESIA=1 ;;
     --install-deps) INSTALL_DEPS=1 ;;
     --dry-run|-n) DRY_RUN=1 ;;
     --help|-h) sed -n '1,/^set -e/p' "$0" | sed 's/^# \?//' | head -n -1; exit 0 ;;
@@ -245,6 +251,19 @@ Toggle in any session:
 - `stop caveman` / `normal mode` — disable for current session
 
 Code, commits, PRs, file contents: always written normal (caveman applies to user-facing prose only). Skip the install entirely with `--skip-caveman` on the starter.
+
+# Amnesia (88plug, compaction continuity)
+
+`amnesia@88plug` is installed by default. Survives Claude Code's auto-compaction at the 200k boundary by:
+- Continuously capturing tool calls (`PostToolUse`)
+- Taking preemptive snapshots before the next compact (`UserPromptSubmit`)
+- Mechanically handing off state at compact + async Opus 4.7 enrichment (`PostCompact`)
+- Refining state at turn end (`Stop`)
+- Restoring full context on resume / next session (`SessionStart`)
+
+All amnesia output is isolated from `CLAUDE.md` and the file-based auto-memory — it operates as a separate continuity layer invisible to the user. Slash commands: `/snapshot`, `/recall`, `/promote`, `/status`. Skip with `--skip-amnesia` on the starter.
+
+If you previously ran a custom `PostCompact` restore hook, retire it — amnesia's 4-layer system supersedes single-file state restoration. Source: https://github.com/88plug/amnesia.
 CLAUDEMD_EOF
 fi
 
@@ -312,7 +331,8 @@ cat > "${CLAUDE_DIR}/settings.json" <<JSON_EOF
     "security-guidance@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "caveman-plus@caveman-plus": true
+    "caveman-plus@caveman-plus": true,
+    "amnesia@88plug": true
   },
   "sandbox": {
     "enabled": false
@@ -378,6 +398,29 @@ if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
   fi
 elif [ "$SKIP_CAVEMAN" = 1 ]; then
   warn "Skipping caveman-plus install (--skip-caveman)"
+fi
+
+# ===== 6c. amnesia (88plug, compaction continuity) =====
+# Survives Claude Code auto-compaction: continuous tool-call capture (PostToolUse),
+# mechanical handoff + async Opus 4.7 enrichment (PostCompact), preemptive snapshot
+# (UserPromptSubmit), state refinement (Stop), full restore on next session/resume
+# (SessionStart). Isolated from CLAUDE.md/auto-memory — invisible to the user.
+# Source: https://github.com/88plug/amnesia
+if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_AMNESIA" = 0 ]; then
+  log "Ensuring 88plug marketplace is registered (for amnesia)"
+  if claude plugin marketplace list 2>/dev/null | grep -q '^88plug'; then
+    log "  88plug marketplace already registered"
+  else
+    run "claude plugin marketplace add 88plug/amnesia"
+  fi
+
+  if claude plugin list 2>/dev/null | grep -q 'amnesia@88plug'; then
+    log "  amnesia: already installed"
+  else
+    run "claude plugin install 'amnesia@88plug' || true"
+  fi
+elif [ "$SKIP_AMNESIA" = 1 ]; then
+  warn "Skipping amnesia install (--skip-amnesia)"
 fi
 
 # ===== 7. MCP servers =====
@@ -488,6 +531,15 @@ if [ "$DRY_RUN" = 0 ]; then
       warn "caveman-plus not registered — check 'claude plugin install caveman-plus@caveman-plus'"
     fi
   fi
+
+  # amnesia install smoke check (skipped if --skip-amnesia or --skip-plugins)
+  if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_AMNESIA" = 0 ]; then
+    if claude plugin list 2>/dev/null | grep -q 'amnesia@88plug'; then
+      log "  amnesia: installed"
+    else
+      warn "amnesia not registered — check 'claude plugin install amnesia@88plug'"
+    fi
+  fi
 fi
 
 # ===== Summary =====
@@ -505,6 +557,10 @@ log "  - Restart any running Claude Code session for the hook to take effect."
 log "  - caveman-plus is active by default at full-plus mode (~75% token savings)."
 log "    Toggle in-session with /caveman lite|full|full-plus|ultra, disable with"
 log "    'stop caveman'. Skip install entirely with --skip-caveman on the starter."
+log "  - amnesia is active by default for compaction continuity. Slash commands:"
+log "    /snapshot /recall /promote /status. Survives auto-compact at 200k boundary."
+log "    Skip install entirely with --skip-amnesia. If you have a custom PostCompact"
+log "    restore hook, retire it — amnesia's 4-layer system supersedes it."
 log "  - All MCPs are lazy-loaded by default via ENABLE_TOOL_SEARCH=true: their"
 log "    tool descriptions are deferred and only loaded when Claude needs them."
 log "    To force-load a specific MCP every turn (e.g. context7), edit its"
