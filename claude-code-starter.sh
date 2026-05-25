@@ -23,7 +23,11 @@
 #      default full-plus). Skip with --skip-amnesia / --skip-caveman.
 #   7. Registers user-scope MCP servers (filesystem, memory, git, time, fetch,
 #      sequential-thinking, repomix, context7, chrome-devtools, playwright, exa,
-#      slack, linear, notion). Idempotent: skips already-registered servers.
+#      slack, linear, notion, github, sentry, cloudflare-{api,bindings,obs,radar})
+#      plus env-gated: postgres (crystaldba/postgres-mcp, replaces deprecated
+#      @modelcontextprotocol/server-postgres), sqlite, grafana, runpod, vnc
+#      (hrrrsn/mcp-vnc), redfish (nokia/mcp-redfish — BMC management).
+#      Idempotent: skips already-registered servers.
 #   8. Verifies the install (settings.json valid, hook executable, hook output
 #      contains the OVH/closed-source/anti-drift guardrails).
 #
@@ -449,15 +453,23 @@ fi
 # ===== 7. MCP servers =====
 if [ "$SKIP_MCP" = 0 ]; then
   log "Registering MCP servers at user scope"
+  # Array-safe: avoids run/eval so values containing JSON, braces, or other
+  # shell metacharacters (e.g. REDFISH_HOSTS) are passed through untouched.
   add_mcp() {
     local name="$1"; shift
     if claude mcp get "$name" >/dev/null 2>&1; then
       log "  ${name}: already registered"
-    else
-      log "  ${name}: adding"
-      run "claude mcp add --scope user '$name' $*" \
-        || record_failure "mcp:${name}"
+      return 0
     fi
+    log "  ${name}: adding"
+    if [ "$DRY_RUN" = 1 ]; then
+      printf '\033[1;36m[dry-run]\033[0m claude mcp add --scope user %q' "$name"
+      printf ' %q' "$@"
+      printf '\n'
+      return 0
+    fi
+    claude mcp add --scope user "$name" "$@" \
+      || record_failure "mcp:${name}"
   }
 
   # stdio servers via bunx (preferred — faster cold start than npx). The
@@ -492,11 +504,17 @@ if [ "$SKIP_MCP" = 0 ]; then
   add_mcp cloudflare-observability --transport http -- https://observability.mcp.cloudflare.com/mcp
   add_mcp cloudflare-radar         --transport http -- https://radar.mcp.cloudflare.com/mcp
 
-  # Database MCPs — env-gated (need connection target)
-  if [ -n "${POSTGRES_URL:-}" ]; then
-    add_mcp postgres --transport stdio -- ${BX} @modelcontextprotocol/server-postgres "${POSTGRES_URL}"
+  # Database MCPs — env-gated (need connection target).
+  # NOTE: @modelcontextprotocol/server-postgres is deprecated upstream
+  # ("Package no longer supported" on npm). Switched to crystaldba's
+  # postgres-mcp (PyPI: postgres-mcp), which reads DATABASE_URI and
+  # supports read-only or read/write modes. POSTGRES_URL still accepted
+  # as a fallback so existing setups don't break.
+  if [ -n "${DATABASE_URI:-${POSTGRES_URL:-}}" ]; then
+    DB_URI="${DATABASE_URI:-${POSTGRES_URL}}"
+    add_mcp postgres --transport stdio --env "DATABASE_URI=${DB_URI}" -- uvx postgres-mcp
   else
-    warn "Skipping postgres MCP (set POSTGRES_URL=postgresql://... to enable)"
+    warn "Skipping postgres MCP (set DATABASE_URI=postgresql://... to enable)"
   fi
   if [ -n "${SQLITE_DB_PATH:-}" ]; then
     add_mcp sqlite --transport stdio -- uvx mcp-server-sqlite --db-path "${SQLITE_DB_PATH}"
@@ -517,6 +535,30 @@ if [ "$SKIP_MCP" = 0 ]; then
     add_mcp runpod --transport stdio --env "RUNPOD_API_KEY=${RUNPOD_API_KEY}" -- ${BX} @runpod/mcp-server@latest
   else
     warn "Skipping runpod MCP (set RUNPOD_API_KEY to enable)"
+  fi
+
+  # VNC remote desktop control — https://github.com/hrrrsn/mcp-vnc
+  if [ -n "${VNC_HOST:-}" ] && [ -n "${VNC_PORT:-}" ] && [ -n "${VNC_PASSWORD:-}" ]; then
+    add_mcp vnc --transport stdio \
+      --env "VNC_HOST=${VNC_HOST}" \
+      --env "VNC_PORT=${VNC_PORT}" \
+      --env "VNC_PASSWORD=${VNC_PASSWORD}" \
+      -- ${BX} @hrrrsn/mcp-vnc
+  else
+    warn "Skipping vnc MCP (set VNC_HOST, VNC_PORT, VNC_PASSWORD to enable)"
+  fi
+
+  # Redfish (BMC / out-of-band server management — iDRAC, iLO, etc).
+  # Not on PyPI, pulled from git. Source: https://github.com/nokia/mcp-redfish
+  if [ -n "${REDFISH_HOSTS:-}" ]; then
+    REDFISH_ENV_FLAGS=(--env "REDFISH_HOSTS=${REDFISH_HOSTS}")
+    [ -n "${REDFISH_USERNAME:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_USERNAME=${REDFISH_USERNAME}")
+    [ -n "${REDFISH_PASSWORD:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_PASSWORD=${REDFISH_PASSWORD}")
+    [ -n "${REDFISH_AUTH_METHOD:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_AUTH_METHOD=${REDFISH_AUTH_METHOD}")
+    add_mcp redfish --transport stdio "${REDFISH_ENV_FLAGS[@]}" \
+      -- uvx --from git+https://github.com/nokia/mcp-redfish mcp-redfish
+  else
+    warn "Skipping redfish MCP (set REDFISH_HOSTS='[{\"address\":\"...\"}]' to enable)"
   fi
 else
   warn "Skipping MCP install (--skip-mcp)"
@@ -602,8 +644,11 @@ log "    require OAuth on first use: run /mcp inside a session and complete auth
 log "  - Env-gated MCP credentials (re-run the script after setting):"
 log "      export GRAFANA_URL=...       GRAFANA_SERVICE_ACCOUNT_TOKEN=..."
 log "      export RUNPOD_API_KEY=..."
-log "      export POSTGRES_URL=postgresql://..."
+log "      export DATABASE_URI=postgresql://...     # also accepts POSTGRES_URL"
 log "      export SQLITE_DB_PATH=/path/to/db.sqlite"
+log "      export VNC_HOST=...  VNC_PORT=5900  VNC_PASSWORD=..."
+log "      export REDFISH_HOSTS='[{\"address\":\"10.0.0.1\"}]'"
+log "        # optional: REDFISH_USERNAME, REDFISH_PASSWORD, REDFISH_AUTH_METHOD"
 log "  - For heavy MCPs only used in specific workflows (e.g. chrome-devtools,"
 log "    playwright), consider moving them out of user scope into a custom"
 log "    subagent's mcpServers: frontmatter — keeps the main session even leaner."
