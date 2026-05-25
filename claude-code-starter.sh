@@ -16,6 +16,9 @@
 #   5. Writes ~/.claude/settings.json — subagent model = opus, official plugins
 #      enabled, dark theme, sandbox off, SubagentStart hook wired to (4).
 #   6. Adds the claude-plugins-official marketplace and installs the 10 plugins.
+#   6b. Adds 88plug/caveman-plus marketplace and installs caveman-plus@caveman-plus
+#      (88plug edition, full-plus default — ~75% token savings, benchmarked).
+#      Skip with --skip-caveman.
 #   7. Registers user-scope MCP servers (filesystem, memory, git, time, fetch,
 #      sequential-thinking, repomix, context7, chrome-devtools, playwright, exa,
 #      slack, linear, notion). Idempotent: skips already-registered servers.
@@ -26,6 +29,7 @@
 #   --force, -f       Overwrite existing files without prompting.
 #   --skip-mcp        Skip MCP server registration (step 7).
 #   --skip-plugins    Skip plugin installation (step 6).
+#   --skip-caveman    Skip caveman-plus install (default: installed, full-plus mode).
 #   --install-deps    Auto-install missing bun and uv (via their official curl|sh
 #                     installers from bun.sh and astral.sh). Without this flag,
 #                     missing deps print the exact install command and fail.
@@ -47,12 +51,14 @@ FORCE=0
 DRY_RUN=0
 SKIP_MCP=0
 SKIP_PLUGINS=0
+SKIP_CAVEMAN=0
 INSTALL_DEPS=0
 for arg in "$@"; do
   case "$arg" in
     --force|-f) FORCE=1 ;;
     --skip-mcp) SKIP_MCP=1 ;;
     --skip-plugins) SKIP_PLUGINS=1 ;;
+    --skip-caveman) SKIP_CAVEMAN=1 ;;
     --install-deps) INSTALL_DEPS=1 ;;
     --dry-run|-n) DRY_RUN=1 ;;
     --help|-h) sed -n '1,/^set -e/p' "$0" | sed 's/^# \?//' | head -n -1; exit 0 ;;
@@ -229,6 +235,16 @@ When the user asks you to create LICENSE, CODE_OF_CONDUCT.md, CONTRIBUTING.md, o
 # Subagent guardrail (auto-enforced by hook)
 
 The built-in `Explore` and `Plan` subagents skip CLAUDE.md by default (documented at https://code.claude.com/docs/en/sub-agents). This setup includes a `SubagentStart` hook at `~/.claude/hooks/inject-claudemd-into-subagents.sh` that re-injects both `~/.claude/CLAUDE.md` and `$CLAUDE_PROJECT_DIR/CLAUDE.md` into those subagents via `additionalContext`. **Do not remove the hook** without a documented replacement — it is the only thing keeping Explore/Plan honest about project-specific rules.
+
+# Caveman-plus mode (88plug edition, default: full-plus)
+
+`caveman-plus@caveman-plus` is installed by default. Active at `full-plus` — terse, fragment-OK output that drops articles/filler while preserving full technical accuracy. Benchmarked at +44.1% general / +45.5% dialogue token savings vs the upstream `full` default, near-zero quality cost. Source + benchmarks: https://github.com/88plug/caveman-plus (see `benchmarks/final-benchmark-summary-2026-04-20.md`).
+
+Toggle in any session:
+- `/caveman lite|full|full-plus|ultra` — switch level
+- `stop caveman` / `normal mode` — disable for current session
+
+Code, commits, PRs, file contents: always written normal (caveman applies to user-facing prose only). Skip the install entirely with `--skip-caveman` on the starter.
 CLAUDEMD_EOF
 fi
 
@@ -295,7 +311,8 @@ cat > "${CLAUDE_DIR}/settings.json" <<JSON_EOF
     "code-review@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
+    "frontend-design@claude-plugins-official": true,
+    "caveman-plus@caveman-plus": true
   },
   "sandbox": {
     "enabled": false
@@ -340,6 +357,27 @@ if [ "$SKIP_PLUGINS" = 0 ]; then
   done
 else
   warn "Skipping plugin install (--skip-plugins)"
+fi
+
+# ===== 6b. caveman-plus (88plug edition, full-plus default) =====
+# Ships terse-mode output that cuts ~75% tokens with near-zero quality cost.
+# Benchmark: +44.1% general / +45.5% dialogue savings vs upstream `full` default.
+# Source: https://github.com/88plug/caveman-plus
+if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
+  log "Ensuring caveman-plus marketplace is registered"
+  if claude plugin marketplace list 2>/dev/null | grep -q '^caveman-plus'; then
+    log "  caveman-plus marketplace already registered"
+  else
+    run "claude plugin marketplace add 88plug/caveman-plus"
+  fi
+
+  if claude plugin list 2>/dev/null | grep -q 'caveman-plus@caveman-plus'; then
+    log "  caveman-plus: already installed"
+  else
+    run "claude plugin install 'caveman-plus@caveman-plus' || true"
+  fi
+elif [ "$SKIP_CAVEMAN" = 1 ]; then
+  warn "Skipping caveman-plus install (--skip-caveman)"
 fi
 
 # ===== 7. MCP servers =====
@@ -441,6 +479,15 @@ if [ "$DRY_RUN" = 0 ]; then
   else
     warn "anti-drift section not found in hook output — CLAUDE.md may be malformed"
   fi
+
+  # caveman-plus install smoke check (skipped if --skip-caveman or --skip-plugins)
+  if [ "$SKIP_PLUGINS" = 0 ] && [ "$SKIP_CAVEMAN" = 0 ]; then
+    if claude plugin list 2>/dev/null | grep -q 'caveman-plus@caveman-plus'; then
+      log "  caveman-plus: installed"
+    else
+      warn "caveman-plus not registered — check 'claude plugin install caveman-plus@caveman-plus'"
+    fi
+  fi
 fi
 
 # ===== Summary =====
@@ -455,6 +502,9 @@ log "  backup: ${BACKUP_DIR}"
 log ""
 log "Next steps:"
 log "  - Restart any running Claude Code session for the hook to take effect."
+log "  - caveman-plus is active by default at full-plus mode (~75% token savings)."
+log "    Toggle in-session with /caveman lite|full|full-plus|ultra, disable with"
+log "    'stop caveman'. Skip install entirely with --skip-caveman on the starter."
 log "  - All MCPs are lazy-loaded by default via ENABLE_TOOL_SEARCH=true: their"
 log "    tool descriptions are deferred and only loaded when Claude needs them."
 log "    To force-load a specific MCP every turn (e.g. context7), edit its"
