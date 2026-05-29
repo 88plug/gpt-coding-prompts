@@ -46,7 +46,10 @@ FAILURES=()
 # than aborting on first error so the rest of the install still proceeds.
 add_mcp() {
   local name="$1"; shift
-  if claude mcp get "$name" --scope "$SCOPE" >/dev/null 2>&1; then
+  # `claude mcp get` takes only <name> — `--scope` is not a valid flag (it errors,
+  # which under >/dev/null always read as "not registered", so every server was
+  # re-added on each run and already-registered ones recorded spurious failures).
+  if claude mcp get "$name" >/dev/null 2>&1; then
     log "  ${name}: already registered"
     return 0
   fi
@@ -159,8 +162,12 @@ if [ -n "${REDFISH_HOSTS:-}" ]; then
   [ -n "${REDFISH_USERNAME:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_USERNAME=${REDFISH_USERNAME}")
   [ -n "${REDFISH_PASSWORD:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_PASSWORD=${REDFISH_PASSWORD}")
   [ -n "${REDFISH_AUTH_METHOD:-}" ] && REDFISH_ENV_FLAGS+=(--env "REDFISH_AUTH_METHOD=${REDFISH_AUTH_METHOD}")
+  # git+https installs the default-branch HEAD; pin with REDFISH_REF=<tag|sha> for
+  # a reproducible, reviewed revision (highest supply-chain exposure here — BMC tool).
+  REDFISH_SRC="git+https://github.com/nokia/mcp-redfish"
+  [ -n "${REDFISH_REF:-}" ] && REDFISH_SRC="${REDFISH_SRC}@${REDFISH_REF}"
   add_mcp redfish --transport stdio "${REDFISH_ENV_FLAGS[@]}" \
-    -- uvx --from git+https://github.com/nokia/mcp-redfish mcp-redfish
+    -- uvx --from "${REDFISH_SRC}" mcp-redfish
 else
   warn "Skipping redfish MCP (set REDFISH_HOSTS='[{\"address\":\"...\"}]' to enable)"
 fi
